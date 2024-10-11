@@ -1,0 +1,8 @@
+
+[project]
+name = "zuspec"
+version = "0.0.1"
+
+dependencies = [
+    "zuspec-sv>=0.0.1"
+]
