@@ -16,7 +16,7 @@ jobs:
       run: |
         python3 -m venv py
         ./py/bin/python3 -m pip install setuptools wheel twine build
-        sed -i -e pyproject.toml -e "s/version = \"([0-9][0-9]*.[0-9][0-9]*.[0-9][0-9]*\)\"/version = \"\1.${GITHUB_RUN_ID}\"/"
+        sed -i -e pyproject.toml -e "s/version = \"([0-9][0-9]*.[0-9][0-9]*.[0-9][0-9]*\)\"/version = \"\1\.${GITHUB_RUN_ID}\"/"
         ./py/bin/python3 -m build --wheel --no-isolation 
 #    - name: Build Docs
 #      run: |
