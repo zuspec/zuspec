@@ -5,8 +5,18 @@ package:
   dep-sets:
   - name: default-dev
     deps:
-    - name: zuspec-sv
-      url: https://github.com/zuspec/zuspec-sv.git
+    - name: zuspec-dataclasses
+      url: https://github.com/zuspec/zuspec-dataclasses.git
+      branch: mballance/simplify
+    - name: zuspec-be-sw
+      url: https://github.com/zuspec/zuspec-be-sw.git
+      branch: mballance/simplify
+    - name: zuspec-be-sv
+      url: https://github.com/zuspec/zuspec-be-sv.git
+      branch: mballance/simplify
+    - name: zuspec-be-fv
+      url: https://github.com/zuspec/zuspec-be-fv.git
+      branch: mballance/simplify
     - name: build
       src: pypi
 
