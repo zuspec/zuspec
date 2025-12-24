@@ -8,3 +8,8 @@ dependencies = [
     "zuspec-be-sv",
     "zuspec-be-sw"
 ]
+
+[tool.mypy]
+plugins = ["zuspec.dataclasses.mypy.plugin"]
+show_column_numbers = true
+show_error_end = true
