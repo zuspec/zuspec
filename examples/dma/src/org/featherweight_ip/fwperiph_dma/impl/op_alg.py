@@ -3,13 +3,13 @@ from __future__ import annotations
 import zuspec.dataclasses as zdc
 from typing import cast, Optional, Tuple
 from zuspec.dataclasses.rt.lock_rt import LockRT
-from .logical import op
+from ..op import DmaChannelOp, DmaOp
 
 class Object:
     pass
 
 @zdc.dataclass
-class DmaChannelImpl(op.DmaChannel, zdc.Component):
+class DmaChannelImpl(DmaChannelOp, zdc.Component):
 
     async def m2m(self,
                   src : zdc.u32,
@@ -18,7 +18,7 @@ class DmaChannelImpl(op.DmaChannel, zdc.Component):
                   chk_sz : zdc.u16):
         xfers : zdc.u32 = 0
         assert self._impl is not None
-        dma : DmaImpl = cast(DmaImpl, self._impl.parent)
+        dma : DmaImplOpAlg = cast(DmaImplOpAlg, self.parent)
 
         # Iterate over chunks
         while xfers < tot_sz:
@@ -33,7 +33,9 @@ class DmaChannelImpl(op.DmaChannel, zdc.Component):
                     xfers += 1
 
 @zdc.dataclass
-class DmaImpl(op.Dma, zdc.Component):
+class DmaImplOpAlg(DmaOp, zdc.Component):
+    """Provides an algorithmic implementation of a DMA engine with
+    Operation-level physical interfaces"""
     memif : zdc.MemIF = zdc.port()
     memif_lock : zdc.Lock = zdc.inst()
 
@@ -41,6 +43,6 @@ class DmaImpl(op.Dma, zdc.Component):
     # TODO: can elements get parent?
     # Need channel to be able to arbitrate for 
     # TODO: Support an initialization expression?
-    channels : Tuple[op.DmaChannel, ...] = zdc.tuple(size=16, elem_factory=DmaChannelImpl)
+    channels : Tuple[DmaChannelOp, ...] = zdc.tuple(size=16, elem_factory=DmaChannelImpl)
 
 
