@@ -17,7 +17,11 @@ package:
     - name: zuspec-be-fv
       url: https://github.com/zuspec/zuspec-be-fv.git
       branch: mballance/simplify
+    - name: zuspec-be-trace
+      url: https://github.com/zuspec/zuspec-be-trace.git
     - name: build
+      src: pypi
+    - name: uvloop
       src: pypi
 
   
