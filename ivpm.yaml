@@ -19,6 +19,8 @@ package:
       branch: mballance/simplify
     - name: zuspec-be-trace
       url: https://github.com/zuspec/zuspec-be-trace.git
+    - name: zuspec-be-hdlsim
+      url: https://github.com/zuspec/zuspec-be-hdlsim.git
     - name: build
       src: pypi
     - name: uvloop
