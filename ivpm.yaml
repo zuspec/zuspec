@@ -5,9 +5,25 @@ package:
   dep-sets:
   - name: default-dev
     deps:
-    - name: zuspec-sv
-      url: https://github.com/zuspec/zuspec-sv.git
+    - name: zuspec-dataclasses
+      url: https://github.com/zuspec/zuspec-dataclasses.git
+      branch: mballance/simplify
+    - name: zuspec-be-sw
+      url: https://github.com/zuspec/zuspec-be-sw.git
+      branch: mballance/simplify
+    - name: zuspec-be-sv
+      url: https://github.com/zuspec/zuspec-be-sv.git
+      branch: mballance/simplify
+    - name: zuspec-be-fv
+      url: https://github.com/zuspec/zuspec-be-fv.git
+      branch: mballance/simplify
+    - name: zuspec-be-trace
+      url: https://github.com/zuspec/zuspec-be-trace.git
+    - name: zuspec-be-hdlsim
+      url: https://github.com/zuspec/zuspec-be-hdlsim.git
     - name: build
+      src: pypi
+    - name: uvloop
       src: pypi
 
   
