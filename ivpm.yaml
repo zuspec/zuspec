@@ -7,16 +7,12 @@ package:
     deps:
     - name: zuspec-dataclasses
       url: https://github.com/zuspec/zuspec-dataclasses.git
-      branch: mballance/simplify
     - name: zuspec-be-sw
       url: https://github.com/zuspec/zuspec-be-sw.git
-      branch: mballance/simplify
     - name: zuspec-be-sv
       url: https://github.com/zuspec/zuspec-be-sv.git
-      branch: mballance/simplify
     - name: zuspec-be-fv
       url: https://github.com/zuspec/zuspec-be-fv.git
-      branch: mballance/simplify
     - name: zuspec-be-trace
       url: https://github.com/zuspec/zuspec-be-trace.git
     - name: zuspec-be-hdlsim
