@@ -3,7 +3,7 @@ import pytest
 import zuspec.dataclasses as zdc
 from zuspec.dataclasses import profiles
 from zuspec.dataclasses.rt.lock_rt import LockRT
-from ..op import DmaImpl
+from ..src.org.featherweight_ip.fwperiph_dma.impl.op_alg import DmaImplOpAlg
 
 
 def _wr32(mem: bytearray, addr: int, val: int):
@@ -139,7 +139,7 @@ class MemModel(zdc.Component):
 class TestDMAOp(zdc.Component):
     __test__ = False
 
-    dma : DmaImpl = zdc.inst()
+    dma : DmaImplOpAlg = zdc.inst()
     mem : MemModel = zdc.inst()
 
     def __bind__(self):
@@ -160,14 +160,15 @@ def test_dma_single_xfer():
 
     async def run():
         start_time = tb.time()
-        await tb.dma.channels[0].m2m(src, dst, 16, 4)
+        await tb.dma.channels[0].transfer_chunked(
+            src, dst, size_bytes=16*4, chunk_bytes=4*4)
         end_time = tb.time()
-        
+
         # Verify timing: 16 transfers * 2 accesses (read+write) * latency
         # Sequential accesses within row = 10ns per access
         elapsed_ns = end_time.as_ns() - start_time.as_ns()
         print(f"Transfer time: {elapsed_ns}ns")
-        
+
         # Should be roughly 16*2*10 = 320ns (all sequential within row)
         assert elapsed_ns >= 300  # Account for some overhead
 
@@ -189,7 +190,8 @@ def test_dma_partial_last_chunk():
         _wr32(tb.mem.data, src + 4*i, 0x11223300 + i)
 
     async def run():
-        await tb.dma.channels[0].m2m(src, dst, 10, 4)
+        await tb.dma.channels[0].transfer_chunked(
+            src, dst, size_bytes=10*4, chunk_bytes=4*4)
 
     asyncio.run(run())
 
@@ -210,7 +212,8 @@ def test_dma_indexed_channel_access():
 
     async def run():
         # Verify tuple wrapper supports indexing
-        await tb.dma.channels[3].m2m(src, dst, 8, 8)
+        await tb.dma.channels[3].transfer_chunked(
+            src, dst, size_bytes=8*4, chunk_bytes=8*4)
 
     asyncio.run(run())
 
@@ -235,14 +238,16 @@ def test_dma_concurrent_channels():
     async def run():
         start_time = tb.time()
         await asyncio.gather(
-            tb.dma.channels[0].m2m(src0, dst0, 16, 4),
-            tb.dma.channels[1].m2m(src1, dst1, 16, 4),
+            tb.dma.channels[0].transfer_chunked(
+                src0, dst0, size_bytes=16*4, chunk_bytes=4*4),
+            tb.dma.channels[1].transfer_chunked(
+                src1, dst1, size_bytes=16*4, chunk_bytes=4*4),
         )
         end_time = tb.time()
-        
+
         elapsed_ns = end_time.as_ns() - start_time.as_ns()
         print(f"Concurrent transfer time: {elapsed_ns}ns")
-        
+
         # Two channels arbitrating for same memory via lock
         # Transfers serialize, so timing is ~2x single channel
         # But with interleaving, may see bank/row switches
@@ -272,16 +277,17 @@ def test_dma_bank_switching():
 
     async def run():
         start_time = tb.time()
-        await tb.dma.channels[0].m2m(src, dst, 8, 8)
+        await tb.dma.channels[0].transfer_chunked(
+            src, dst, size_bytes=8*4, chunk_bytes=8*4)
         end_time = tb.time()
-        
+
         elapsed_ns = end_time.as_ns() - start_time.as_ns()
         print(f"Bank-switching transfer time: {elapsed_ns}ns")
-        
+
         # Each iteration: read (bank 0) then write (bank 1) = bank switch
         # 8 iterations * 2 accesses, first access in each bank costs 30ns
         # Subsequent sequential accesses in same bank cost 10ns
-        # Pattern: read_bank0(30) write_bank1(30) read_bank0(30) write_bank1(30)...
+        # Pattern: read_bank0(30) write_bank1(30) read_bank0(30)...
         # = 8*30 + 8*30 = 480ns for bank switches
         assert elapsed_ns >= 450
 
@@ -308,13 +314,14 @@ def test_dma_row_switching():
 
     async def run():
         start_time = tb.time()
-        await tb.dma.channels[0].m2m(src, dst, 8, 8)
+        await tb.dma.channels[0].transfer_chunked(
+            src, dst, size_bytes=8*4, chunk_bytes=8*4)
         end_time = tb.time()
-        
+
         elapsed_ns = end_time.as_ns() - start_time.as_ns()
         print(f"Row-switching transfer time: {elapsed_ns}ns")
-        
-        # Each iteration: read (row 0) then write (row 1) = row switch within same bank
+
+        # Each iteration: read (row 0) then write (row 1) = row switch
         # Row switches cost 50ns
         # 8 iterations * 2 accesses, each switching rows
         assert elapsed_ns >= 700  # 8*2*50 = 800ns, allow some margin
@@ -341,11 +348,12 @@ def test_dma_chunk_size_impact():
         # Reset memory state between runs
         tb.mem._last_bank = -1
         tb.mem._last_row = -1
-        
+
         start_time = tb.time()
-        await tb.dma.channels[0].m2m(src, dst, total, chunk_size)
+        await tb.dma.channels[0].transfer_chunked(
+            src, dst, size_bytes=total*4, chunk_bytes=chunk_size*4)
         end_time = tb.time()
-        
+
         elapsed_ns = end_time.as_ns() - start_time.as_ns()
         return elapsed_ns
 
