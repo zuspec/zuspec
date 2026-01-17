@@ -1,3 +1,16 @@
 {
-    "python.defaultInterpreterPath": "${workspaceFolder}/packages/python/bin/python"
+    "python.defaultInterpreterPath": "${workspaceFolder}/packages/python/bin/python",
+    
+    // Flake8 linting configuration
+    "python.linting.enabled": true,
+    "python.linting.flake8Enabled": true,
+    "python.linting.flake8Path": "${workspaceFolder}/packages/python/bin/flake8",
+    "python.linting.flake8Args": [
+        "--config=${workspaceFolder}/.flake8"
+    ],
+    "python.linting.lintOnSave": true,
+    
+    // Disable other linters to avoid conflicts
+    "python.linting.pylintEnabled": false,
+    "python.linting.mypyEnabled": false
 }

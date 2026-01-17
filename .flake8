@@ -1,0 +1,24 @@
+[flake8]
+# Enable Zuspec profile checker
+zuspec-enabled = True
+zuspec-profile = Retargetable
+
+# Standard flake8 options
+max-line-length = 100
+exclude = 
+    .git,
+    __pycache__,
+    .venv,
+    venv,
+    build,
+    dist,
+    *.egg-info,
+    out,
+    packages/.download,
+    packages/python/lib,
+    packages/doxygen-filter-sv,
+    packages/verilator,
+    packages/gemini-riscv
+
+# Ignore common rules that may conflict
+ignore = E203,E501,W503
