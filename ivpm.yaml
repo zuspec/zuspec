@@ -13,6 +13,8 @@ package:
       url: https://github.com/zuspec/zuspec-be-sv.git
     - name: zuspec-be-fv
       url: https://github.com/zuspec/zuspec-be-fv.git
+    - name: zuspec-synth
+      url: https://github.com/zuspec/zuspec-synth.git
     - name: zuspec-be-trace
       url: https://github.com/zuspec/zuspec-be-trace.git
     - name: zuspec-be-hdlsim
