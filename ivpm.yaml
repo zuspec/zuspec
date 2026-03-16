@@ -17,10 +17,17 @@ package:
       url: https://github.com/zuspec/zuspec-be-trace.git
     - name: zuspec-be-hdlsim
       url: https://github.com/zuspec/zuspec-be-hdlsim.git
+    - name: zuspec-solver
+      url: https://github.com/zuspec/zuspec-solver.git
     - name: build
       src: pypi
     - name: uvloop
       src: pypi
+    - name: verilator
+      src: gh-rls
+      url: https://github.com/edapack/verilator-bin
+      prerelease: true
+      cache: true
 
   
 
