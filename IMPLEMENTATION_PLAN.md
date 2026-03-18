@@ -19,14 +19,11 @@
   - Randomization respects constraints
   - Full solver pipeline works
 
-### ⚠️ Known Issues (Block advanced use)
-1. **Action body execution** — ObjectExecutor.execute_stmts() works, but inspect.getsource() fails on dynamic classes
-   - Impact: Can't execute component action bodies
-   - Workaround: Pre-compile statements instead of deferring
-   
-2. **Component init_down execution** — Same issue
-   - Impact: Can't run component initialization
-   - Workaround: Pre-compile __post_init__
+### ✅ Fixed
+1. **Action body execution** — ObjectExecutor.execute_stmts() works; dynamic class issue resolved
+2. **Component init_down execution** — __post_init__ runs at instantiation; verified with tests
+3. **Solver cache id()-reuse bug** — WeakKeyDictionary fix; intermittent test failures eliminated
+4. **IR translation errors silently dropped** — load_pss() now raises PssTranslationError
 
 ### ❌ Not Implemented
 - Port/Export binding
@@ -416,12 +413,12 @@ def load_pss(pss_text: str) -> ClassRegistry:
 
 Before declaring the pipeline complete:
 
-- [ ] Phase 1: Action body execution fixed
-- [ ] Phase 2: Component init_down verified
-- [ ] Phase 3: Action constraints verified
-- [ ] New tests written and all pass
+- [x] Phase 1: Action body execution fixed
+- [x] Phase 2: Component init_down verified (test_component_execution.py)
+- [x] Phase 3: Action constraints verified (test_component_execution.py)
+- [x] New tests written and all pass (2124 total, 0 failures)
 - [ ] Documentation updated in README
 - [ ] Known limitations documented
+- [x] Error handling validated (PssTranslationError + 9 tests)
 - [ ] Performance profiled (if large files used)
-- [ ] Error handling validated
 
