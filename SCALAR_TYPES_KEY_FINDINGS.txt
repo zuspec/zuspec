@@ -1,0 +1,372 @@
+╔═══════════════════════════════════════════════════════════════════════════╗
+║        ZUSPEC-PSS SCALAR DATA TYPES IMPLEMENTATION - KEY FINDINGS         ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ CURRENT STATUS MATRIX                                                   │
+└─────────────────────────────────────────────────────────────────────────┘
+
+Type       │ Parsing │ AST Class        │ IR Class           │ AST→IR │ Status
+───────────┼─────────┼──────────────────┼────────────────────┼────────┼──────
+int        │ ✅      │ DataTypeInt      │ DataTypeInt        │ ✅     │ Complete
+bit        │ ✅      │ DataTypeInt*     │ DataTypeInt*       │ ✅     │ Complete
+bool       │ ✅      │ DataTypeBool     │ DataTypeInt(1-bit) │ ✅     │ Complete  
+string     │ ✅      │ DataTypeString   │ DataTypeString     │ ✅     │ Complete
+enum       │ ✅      │ DataTypeEnum     │ DataTypeEnum       │ ❌ STUB│ Parsing OK
+typedef    │ ✅      │ TypedefDecl      │ (none)             │ ❌ STUB│ Parsing OK
+
+* bit is parsed as DataTypeInt with signed=False (no distinct class)
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ TEST COVERAGE SUMMARY                                                   │
+└─────────────────────────────────────────────────────────────────────────┘
+
+Test File                    │ Tests │ Scope          │ Status
+─────────────────────────────┼───────┼────────────────┼──────────
+test_data_types.py          │  28   │ Parsing + AST  │ ✅ All pass
+test_enums.py               │  21   │ Parsing + AST  │ ✅ All pass
+test_enum_extensions.py     │  ~30  │ Parsing + AST  │ ✅ All pass
+test_typedef.py             │   8   │ Parsing + AST  │ ✅ All pass
+test_ast_to_ir.py           │  24   │ AST→IR → IR    │ ⚠️  No enum/typedef
+───────────────────────────────────────────────────────────────────────────
+
+NO AST→IR or IR→Runtime tests for enum or typedef!
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ DATA_TYPE.PY - IR CLASS DEFINITIONS (383 lines)                        │
+└─────────────────────────────────────────────────────────────────────────┘
+
+Base Classes:
+  ✅ DataType(Base)
+     - name: Optional[str]
+     - py_type: Optional[Any]
+
+Scalar Types:
+  ✅ DataTypeInt
+     - bits: int (default=-1 for unbounded)
+     - signed: bool (True for int, False for bit)
+  
+  ✅ DataTypeString
+  
+  ✅ DataTypeBool - DOES NOT EXIST
+     (bool is implemented as DataTypeInt(bits=1, signed=False))
+  
+  ✅ DataTypeEnum - MINIMAL STUB
+     class DataTypeEnum(DataType): ...
+
+Register Types:
+  ✅ DataTypeRegister (specialization of reg_c)
+  ✅ DataTypeRegisterGroup
+
+Container Types:
+  ✅ DataTypeStruct, DataTypeClass, DataTypeComponent
+  ✅ DataTypeRef (forward reference)
+
+Template Support:
+  ✅ DataTypeParameterized
+  ✅ DataTypeSpecialized
+  ✅ TemplateParam*, TemplateArg*
+
+Others:
+  ✅ DataTypeMemory, DataTypeChannel, DataTypeEvent, DataTypeLock
+  ✅ DataTypeAddressSpace, DataTypeAddrHandle
+  ✅ DataTypeProtocol, DataTypeTuple
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ AST_TO_IR.PY - TRANSLATION IMPLEMENTATION (1195 lines)                 │
+└─────────────────────────────────────────────────────────────────────────┘
+
+WHAT'S IMPLEMENTED:
+───────────────────────────────────────────────────────────────────────────
+✅ _init_builtin_types() - Lines 107-128
+   Registers: bool, int, string, bit[8/16/32/64], int[8/16/32/64]
+
+✅ _translate_data_type() - Lines 831-881
+   ✅ DataTypeInt → ir.DataTypeInt
+   ✅ DataTypeString → ir.DataTypeString
+   ✅ DataTypeBool → ir.DataTypeInt(bits=1, signed=False)
+   ✅ DataTypeUserDefined → ir.DataTypeRef (for forward refs)
+   ✅ TypeIdentifier → ir.DataTypeRegister (for reg_c<R, ACC, SZ>)
+   
+   Line 878-881: else → logs "Unsupported data type"
+                 (DataTypeEnum falls through here!)
+
+✅ _translate_type_identifier() - Lines 883-912
+   Handles template specializations
+
+✅ _translate_reg_c() - Lines 914-1010
+   Register type specialization with template parameters
+
+WHAT'S MISSING:
+───────────────────────────────────────────────────────────────────────────
+❌ _translate_unit() (Lines 144-162)
+   NO handling for:
+     - EnumDecl
+     - TypedefDeclaration
+
+❌ Enum type translation
+   elif isinstance(dtype_node, pss_ast.DataTypeEnum):
+       # MISSING - returns None (unsupported)
+
+❌ Enum declaration translation
+   # Not called anywhere
+
+❌ Typedef handling
+   # TypedefDeclaration never checked
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ IR_TO_RUNTIME.PY - RUNTIME MAPPING (284 lines)                         │
+└─────────────────────────────────────────────────────────────────────────┘
+
+Integer Type Mapping:
+───────────────────────────────────────────────────────────────────────────
+_INT_TYPE_MAP = {
+    (1,  False): zdc.u1,        # 1-bit unsigned (bool)
+    (2,  False): zdc.u2,
+    (4,  False): zdc.u4,
+    (8,  False): zdc.u8,        # byte
+    (16, False): zdc.u16,       # word
+    (32, False): zdc.u32,       # dword
+    (64, False): zdc.u64,
+    (8,  True):  zdc.i8,        # signed byte
+    (16, True):  zdc.i16,
+    (32, True):  zdc.i32,
+    (64, True):  zdc.i64,
+}
+
+Missing:
+  ❌ Enum runtime class generation
+  ❌ Typedef alias handling (probably works auto)
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ TEST PATTERNS AND STRUCTURE                                             │
+└─────────────────────────────────────────────────────────────────────────┘
+
+PARSING TEST PATTERN (test_data_types.py):
+───────────────────────────────────────────
+def test_type_int(parser):
+    """Test int type — verify DataTypeInt and location"""
+    code = """
+struct test_s {
+    rand int value;
+};
+"""
+    root = parse_pss(code, parser=parser)
+    sym = get_symbol(root, "test_s")
+    field = sym.getChild(sym.symtabAt("value"))
+    assert isinstance(field.getType(), ast.DataTypeInt)
+    loc = get_location(sym.getTarget())
+    assert loc is not None
+    assert loc[0] == 2
+
+AST→IR TEST PATTERN (test_ast_to_ir.py):
+────────────────────────────────────────
+class TestAstToIr(unittest.TestCase):
+    def setUp(self):
+        self.parser = Parser()
+        self.translator = AstToIrTranslator(debug=False)
+    
+    def parse_and_translate(self, pss_code: str) -> AstToIrContext:
+        self.parser.parses([(filename, pss_code)])
+        ast_root = self.parser.link()
+        ctx = self.translator.translate(ast_root)
+        return ctx
+    
+    def test_builtin_types(self):
+        ctx = self.parse_and_translate("component C {}")
+        assert "bool" in ctx.type_map
+        bool_type = ctx.type_map["bool"]
+        assert isinstance(bool_type, ir.DataTypeInt)
+        assert bool_type.bits == 1
+        assert bool_type.signed == False
+
+ENUM TEST PATTERN (test_enums.py):
+──────────────────────────────────
+def test_enum_multiple_items(parser):
+    """Test enum with multiple items"""
+    code = """
+enum color_e { RED, GREEN, BLUE };
+    """
+    root = parse_pss(code, parser=parser)
+    assert get_symbol(root, "color_e") is not None
+
+ENUM EXTENSION PATTERN (test_enum_extensions.py):
+──────────────────────────────────────────────────
+def test_enum_extension_basic():
+    pss = """
+enum config_modes_e {MODE_A, MODE_B}
+extend enum config_modes_e {MODE_C, MODE_D}
+    """
+    root = parse_pss(pss)
+    sym = get_symbol(root, "config_modes_e")
+    assert sym is not None
+
+TYPEDEF PATTERN (test_typedef.py):
+──────────────────────────────────
+def test_typedef_basic_bit(parser):
+    """Typedef aliasing a bit type"""
+    code = """
+typedef bit[32] word_t;
+struct s {
+    word_t data;
+};
+"""
+    root = parse_pss(code, parser=parser)
+    sym = get_symbol(root, "s")
+    assert sym is not None
+    assert has_symbol(sym, "data")
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ WHAT NEEDS TO BE IMPLEMENTED                                            │
+└─────────────────────────────────────────────────────────────────────────┘
+
+PRIORITY 1: ENUM AST→IR TRANSLATION (~200 lines code + ~15 tests)
+────────────────────────────────────────────────────────────────
+
+1. Update _translate_unit() to handle EnumDecl:
+   
+   elif isinstance(child, pss_ast.EnumDecl):
+       self._translate_enum(ctx, child)
+
+2. Add _translate_enum() method:
+   
+   def _translate_enum(ctx, enum_decl):
+       name = enum_decl.getName().getId()
+       items = {}
+       for i in range(enum_decl.numItems()):
+           item = enum_decl.getItem(i)
+           item_name = item.getName().getId()
+           value_expr = item.getValue()
+           if value_expr:
+               items[item_name] = self._translate_expr(ctx, value_expr)
+           else:
+               items[item_name] = None
+       enum_type = ir.DataTypeEnum(name=name)
+       enum_type.items = items
+       ctx.add_type(name, enum_type)
+
+3. Update _translate_data_type() to handle DataTypeEnum:
+   
+   elif isinstance(dtype_node, pss_ast.DataTypeEnum):
+       tid = dtype_node.getTid()
+       type_name = self._get_type_name(tid)
+       existing = ctx.get_type(type_name)
+       if existing:
+           return existing
+       else:
+           return ir.DataTypeRef(ref_name=type_name)
+
+4. Enhance DataTypeEnum IR class:
+   
+   @dc.dataclass
+   class DataTypeEnum(DataType):
+       items : Dict[str, Optional[ir.Expr]] = dc.field(default_factory=dict)
+
+5. Add IR→Runtime enum class generation
+
+6. Add tests:
+   - test_enum_ast_to_ir_basic
+   - test_enum_ast_to_ir_with_values
+   - test_enum_reference_in_struct
+   - test_enum_in_constraint
+   - test_enum_extensions_ir
+   - test_enum_ir_to_runtime
+
+PRIORITY 2: TYPEDEF AST→IR TRANSLATION (~50 lines code + ~5 tests)
+─────────────────────────────────────────────────────────────────
+
+1. Update _translate_unit() to handle TypedefDeclaration:
+   
+   elif isinstance(child, pss_ast.TypedefDeclaration):
+       self._translate_typedef(ctx, child)
+
+2. Add _translate_typedef() method:
+   
+   def _translate_typedef(ctx, typedef_decl):
+       name = typedef_decl.getName().getId()
+       base_type_node = typedef_decl.getType()
+       ir_type = self._translate_data_type(ctx, base_type_node)
+       if ir_type:
+           ctx.add_type(name, ir_type)
+
+3. Add tests:
+   - test_typedef_ast_to_ir_bit
+   - test_typedef_ast_to_ir_int
+   - test_typedef_ast_to_ir_string
+   - test_typedef_used_in_field
+   - test_typedef_chained
+
+PRIORITY 3: BIT TYPE REFACTORING (optional, ~100 lines)
+──────────────────────────────────────────────────────
+
+Current approach works (bit = DataTypeInt with signed=False).
+To create distinct class:
+
+1. Add DataTypeBit IR class
+2. Update AST→IR to check for pss_ast.DataTypeBit
+3. Update IR→Runtime mapping
+4. Risk: May break existing code that relies on bit being int
+
+NOT RECOMMENDED - Keep current approach, just document it.
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ FILE LOCATIONS - QUICK REFERENCE                                        │
+└─────────────────────────────────────────────────────────────────────────┘
+
+Core Implementation:
+  /packages/zuspec-dataclasses/src/zuspec/dataclasses/ir/data_type.py
+  /packages/zuspec-fe-pss/python/zuspec/fe/pss/ast_to_ir.py
+  /packages/zuspec-fe-pss/python/zuspec/fe/pss/ir_to_runtime.py
+
+Key Methods:
+  ast_to_ir.py:
+    - _init_builtin_types() ..................... Line 107
+    - _translate_unit() ......................... Line 144
+    - _translate_data_type() .................... Line 831
+    - _translate_type_identifier() ............. Line 883
+    - _translate_reg_c() ........................ Line 914
+
+Tests (Parsing):
+  /packages/zuspec-fe-pss/tests/python/parsing/test_data_types.py (28 tests)
+  /packages/zuspec-fe-pss/tests/python/parsing/test_enums.py (21 tests)
+  /packages/zuspec-fe-pss/tests/python/parsing/test_typedef.py (8 tests)
+  /packages/zuspec-fe-pss/tests/python/parsing/test_enum_extensions.py (~30 tests)
+
+Tests (AST→IR):
+  /packages/zuspec-fe-pss/tests/python/test_ast_to_ir.py (24 tests)
+  ❌ NO enum/typedef AST→IR tests
+
+Test Helpers:
+  /packages/zuspec-fe-pss/tests/python/test_helpers.py
+  /packages/zuspec-fe-pss/tests/python/conftest.py
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ RECOMMENDATIONS                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+
+1. START WITH ENUM:
+   - More commonly used than typedef
+   - Better ROI (used in constraints, function params)
+   - Follow existing test pattern from test_enums.py
+   - ~3-4 days implementation + testing
+
+2. TYPEDEF NEXT:
+   - Simpler than enum (~1 day)
+   - Can be largely automatic (type aliasing)
+   - Fewer edge cases
+
+3. SKIP BIT REFACTORING:
+   - Current approach (bit = DataTypeInt(signed=False)) works
+   - No user-visible difference
+   - Refactoring adds risk with minimal benefit
+
+4. TEST STRATEGY:
+   - Add AST→IR tests alongside parsing tests
+   - Use test_ast_to_ir.py pattern
+   - Ensure round-trip: PSS → Parse → Link → AST→IR → IR
+
+5. DOCUMENTATION:
+   - Update README with scalar type support status
+   - Document bit type mapping approach
+   - Add examples to test files
+
