@@ -1,0 +1,93 @@
+// bus.pss — AMBA-like bus transaction model
+//
+// Demonstrates the PSS language features supported by the zuspec Python runtime:
+//
+//   • Struct fields with scalar constraints
+//   • Bit-slice constraints  (addr[1:0] == 0)
+//   • Struct inheritance     (WriteCmd : BusCmd)
+//   • Fixed arrays with direct-index constraints  (bytes[0] == 0xA5)
+//   • Foreach index-style constraints  (foreach (bytes[i]) { ... })
+//   • Unique constraints over scalar fields
+//   • Component with action hierarchy  (Write : BaseOp)
+
+
+// ─── Base bus command ─────────────────────────────────────────────────────────
+//
+// All bus transactions have a word-aligned address and a 2-bit protection level.
+
+struct BusCmd {
+    rand bit[16] addr;
+    rand bit[2]  prot;          // AXI-like AxPROT: [0]=privileged [1]=secure [2]=instr
+
+    // Word-aligned address in MMIO range 0x0100–0x0FFF
+    constraint { addr % 4 == 0; addr >= 0x100; addr < 0x1000; }
+}
+
+// ─── Write transaction ────────────────────────────────────────────────────────
+
+struct WriteCmd : BusCmd {
+    rand bit[32] data;
+    rand bit[4]  byte_en;       // byte-enable strobe — at least one lane active
+
+    constraint { byte_en > 0; }
+}
+
+// ─── Read transaction ─────────────────────────────────────────────────────────
+
+struct ReadCmd : BusCmd {
+    rand bit[4] burst_len;      // AHB-style: number of beats (1–8)
+
+    constraint { burst_len >= 1; burst_len <= 8; }
+}
+
+// ─── Burst payload ────────────────────────────────────────────────────────────
+//
+// Eight-byte payload where:
+//   - bytes[0] is always the sync marker 0xA5
+//   - every byte is non-zero  (no null bytes allowed in payload)
+
+struct BurstPayload {
+    rand bit[8] bytes[8];
+
+    constraint { bytes[0] == 0xA5; }
+    constraint { foreach (bytes[i]) { bytes[i] > 0; } }
+}
+
+// ─── Arbitration priority ─────────────────────────────────────────────────────
+//
+// Four bus masters each get a distinct priority level (0–7).
+
+struct ArbConfig {
+    rand bit[3] prio_m0;        // master 0 priority
+    rand bit[3] prio_m1;        // master 1 priority
+    rand bit[3] prio_m2;        // master 2 priority
+    rand bit[3] prio_m3;        // master 3 priority
+
+    constraint { prio_m0 < 8; prio_m1 < 8; prio_m2 < 8; prio_m3 < 8; }
+    constraint { unique { prio_m0, prio_m1, prio_m2, prio_m3 }; }
+}
+
+// ─── Component and actions ───────────────────────────────────────────────────
+
+component BusCtrl {
+
+    // Shared base: word-aligned address via bit-slice constraint.
+    action BaseOp {
+        rand bit[16] addr;
+        rand bit[2]  prot;
+        constraint { addr[1:0] == 0; }   // bit-slice pins low 2 bits to 0
+    }
+
+    // Write inherits addr/prot from BaseOp and adds data + byte-enables.
+    action Write : BaseOp {
+        rand bit[32] data;
+        rand bit[4]  byte_en;
+        constraint { byte_en > 0; }
+    }
+
+    // Read inherits addr/prot from BaseOp and adds burst length.
+    action Read : BaseOp {
+        rand bit[4] burst_len;
+        constraint { burst_len >= 1; burst_len <= 8; }
+    }
+}
