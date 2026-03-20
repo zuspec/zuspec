@@ -10,6 +10,8 @@
 //   • Unique constraints over scalar fields
 //   • Component with action hierarchy  (Write : BaseOp)
 
+import std_pkg::*;
+
 
 // ─── Base bus command ─────────────────────────────────────────────────────────
 //
@@ -83,6 +85,12 @@ component BusCtrl {
         rand bit[32] data;
         rand bit[4]  byte_en;
         constraint { byte_en > 0; }
+        exec body {
+            message(NONE, "Hello World!");
+            repeat (i : 10) {
+                message(NONE, "i=%d", i);
+            }
+        }
     }
 
     // Read inherits addr/prot from BaseOp and adds burst length.

@@ -10,6 +10,7 @@ Or from this directory:
 The model is defined in bus.pss (loaded from the same directory as this script).
 """
 
+import asyncio
 import pathlib
 import sys
 from zuspec.fe.pss import load_pss_files
@@ -94,6 +95,13 @@ def main():
         print(f"  Read  seed={seed}: addr=0x{r.addr:04x}  burst_len={r.burst_len}"
               f"  aligned={r.addr%4==0}  1≤len≤8={1<=r.burst_len<=8}")
     assert w.addr % 4 == 0 and r.addr % 4 == 0
+
+    hr("7. BusCtrl actions — exec body")
+    for seed in range(4):
+        pss_top = ns.BusCtrl()
+        w = ns.BusCtrl.Write()
+        asyncio.run(w(pss_top))
+        # TODO: capture input and validate 'Hello World' print
 
     print("\n✓ All assertions passed.\n")
 
