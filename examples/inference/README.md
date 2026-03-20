@@ -25,11 +25,16 @@ cd examples/inference
 source ../../packages/python/bin/activate    # activate the venv
 
 python 01_dma_buffer_inference.py
+python 02_spi_state_inference.py
 python 04_multichannel_dma.py
 python 05_bus_arbitration_chain.py
 ```
 
 All scripts accept `--seed N` to reproduce a specific randomization.
+
+> **Note**: Example 03 (`03_streaming_codec.py`) — Stream flow-object
+> inference — is not yet implemented.  Stream inference requires concurrent
+> coroutine scheduling and is tracked as a future work item.
 
 ---
 
@@ -49,6 +54,24 @@ writes only `do(ReadData)`.  The runtime infers `WriteData` (which produces a
 
 ```
 Execution:  [inferred] WriteData  →  [user-specified] ReadData
+```
+
+---
+
+### `02_spi_state_inference.py` — State flow-object inference
+
+**Concept:** A `FlashRead` action requires a `ChipSelectedState` flow-input
+(the SPI bus must have chip-select asserted before a read can happen).  The
+user writes only `do(FlashRead)`.  The runtime infers `SelectChip` (which
+produces the `ChipSelectedState`) and inserts it before `FlashRead`.
+
+**Key features demonstrated:**
+- `zdc.State` flow objects (persistent device state, not one-shot data)
+- Inferred predecessor produces state that the consumer reads
+- The exact same state instance is handed from producer to consumer
+
+```
+Execution:  [inferred] SelectChip  →  [user-specified] FlashRead
 ```
 
 ---
