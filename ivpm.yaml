@@ -21,6 +21,8 @@ package:
       url: https://github.com/zuspec/zuspec-fe-pss.git
     - name: zuspec-solver
       url: https://github.com/zuspec/zuspec-solver.git
+    - name: zuspec-synth
+      url: https://github.com/zuspec/zuspec-synth.git
     - name: build
       src: pypi
     - name: uvloop
