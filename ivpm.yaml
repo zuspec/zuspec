@@ -25,6 +25,10 @@ package:
       url: https://github.com/zuspec/zuspec-solver.git
     - name: zuspec-synth
       url: https://github.com/zuspec/zuspec-synth.git
+    - name: yosys
+      src: gh-rls
+      url: https://github.com/edapack/yosys-bin
+      cache: true
     - name: build
       src: pypi
     - name: uvloop
