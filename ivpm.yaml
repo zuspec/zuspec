@@ -19,6 +19,8 @@ package:
       url: https://github.com/zuspec/zuspec-be-hdlsim.git
     - name: zuspec-fe-pss
       url: https://github.com/zuspec/zuspec-fe-pss.git
+    - name: zuspec-fe-sv
+      url: https://github.com/zuspec/zuspec-fe-sv.git
     - name: zuspec-solver
       url: https://github.com/zuspec/zuspec-solver.git
     - name: zuspec-synth
