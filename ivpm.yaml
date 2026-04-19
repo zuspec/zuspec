@@ -7,6 +7,8 @@ package:
     deps:
     - name: zuspec-dataclasses
       url: https://github.com/zuspec/zuspec-dataclasses.git
+    - name: zuspec-cli
+      url: https://github.com/zuspec/zuspec-cli.git
     - name: zuspec-be-sw
       url: https://github.com/zuspec/zuspec-be-sw.git
     - name: zuspec-be-sv
@@ -21,6 +23,8 @@ package:
       url: https://github.com/zuspec/zuspec-fe-pss.git
     - name: zuspec-fe-sv
       url: https://github.com/zuspec/zuspec-fe-sv.git
+    - name: zuspec-ir-core
+      url: https://github.com/zuspec/zuspec-ir-core.git
     - name: zuspec-solver
       url: https://github.com/zuspec/zuspec-solver.git
     - name: zuspec-synth
