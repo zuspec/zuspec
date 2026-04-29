@@ -1,0 +1,155 @@
+// Pad assignment modeling pattern — Zuspec-native PSS source
+//
+// Models the pad_configuration example from the PSS Modeling Patterns collection.
+// Each SPI interface needs exclusive pads from a shared padring pool.
+// Valid configurations: 2 initiators | init0+target0 | 2 targets.
+//
+// Pad table:
+//   A_PAD0=0  A_PAD1=1  A_PAD2=2  A_PAD3=3  A_PAD4=4
+//   B_PAD0=5  B_PAD1=6  B_PAD2=7  B_PAD3=8  B_PAD4=9
+//   B_PAD5=10 B_PAD6=11 RST_PAD=12
+
+// ---------------------------------------------------------------------------
+// Pad resource: one exclusive token per physical pad in the padring.
+// ---------------------------------------------------------------------------
+resource pad_r {
+    rand bit[4] pad_id;
+}
+
+// ---------------------------------------------------------------------------
+// SPI initiator component — stores the interface index and pre-computed
+// valid-pad lists for each signal.
+//
+// Convention used by ir_to_runtime to auto-generate _resource_filters:
+//   lock field X_<signal>_pad -> comp.X_<signal>_pad_pads (valid-pad list)
+// The naming map: lock 'in_pad' -> comp field 'in_pad_pads', etc.
+// ---------------------------------------------------------------------------
+component SPI_initiator_c {
+    int inst_index;
+
+    // Valid pad IDs per signal — populated by init_valid_pads() from pss_top.init_down
+    list<int> in_pad_pads;
+    list<int> out_pad_pads;
+    list<int> clk_pad_pads;
+    list<int> sel0_pad_pads;
+    list<int> sel1_pad_pads;
+
+    // Populate valid-pad lists based on inst_index.
+    // inst_index 0 = initiator0 (A-bank pads), 1 = initiator1 (B-bank pads).
+    solve function void init_valid_pads() {
+        if (inst_index == 0) {
+            in_pad_pads.push_back(0);
+            out_pad_pads.push_back(1);
+            clk_pad_pads.push_back(2);
+            sel0_pad_pads.push_back(3);
+            sel1_pad_pads.push_back(4);
+        } else {
+            in_pad_pads.push_back(5);
+            out_pad_pads.push_back(6);
+            clk_pad_pads.push_back(7);
+            sel0_pad_pads.push_back(8);
+            sel1_pad_pads.push_back(9);
+        }
+    }
+
+    // Pad-assignment action.
+    // Lock fields are claimed from the shared padring pool.
+    // ir_to_runtime detects the naming convention (lock X -> comp.X_pads)
+    // and generates a pre_solve hook that sets _resource_filters to restrict
+    // each lock to its valid pad set from the component.
+    action intr_configure {
+        lock pad_r in_pad;
+        lock pad_r out_pad;
+        lock pad_r clk_pad;
+        lock pad_r sel0_pad;
+        lock pad_r sel1_pad;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// SPI target component
+// ---------------------------------------------------------------------------
+component SPI_target_c {
+    int inst_index;
+
+    list<int> in_pad_pads;
+    list<int> out_pad_pads;
+    list<int> clk_pad_pads;
+    list<int> tgt_sel_pad_pads;
+
+    solve function void init_valid_pads() {
+        if (inst_index == 0) {
+            in_pad_pads.push_back(5);
+            out_pad_pads.push_back(6);
+            clk_pad_pads.push_back(7);
+            tgt_sel_pad_pads.push_back(10);
+        } else {
+            in_pad_pads.push_back(0);
+            out_pad_pads.push_back(1);
+            clk_pad_pads.push_back(2);
+            tgt_sel_pad_pads.push_back(11);
+        }
+    }
+
+    action tgt_configure {
+        lock pad_r in_pad;
+        lock pad_r out_pad;
+        lock pad_r clk_pad;
+        lock pad_r tgt_sel_pad;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Top-level component: owns the padring pool and four SPI sub-components.
+// init_down sets inst_index on each child then calls init_valid_pads() so
+// valid-pad lists are populated before any action is traversed.
+// ---------------------------------------------------------------------------
+component pss_top {
+    pool [13] pad_r padring;
+    bind padring *;
+
+    SPI_initiator_c spi_initiators[2];
+    SPI_target_c    spi_targets[2];
+
+    exec init_down {
+        spi_initiators[0].inst_index = 0;
+        spi_initiators[1].inst_index = 1;
+        spi_targets[0].inst_index    = 0;
+        spi_targets[1].inst_index    = 1;
+
+        spi_initiators[0].init_valid_pads();
+        spi_initiators[1].init_valid_pads();
+        spi_targets[0].init_valid_pads();
+        spi_targets[1].init_valid_pads();
+    }
+
+    // Scenario A: both initiators active simultaneously
+    action soc_2_initiators {
+        activity {
+            parallel {
+                do SPI_initiator_c::intr_configure with comp == pss_top.spi_initiators[0];
+                do SPI_initiator_c::intr_configure with comp == pss_top.spi_initiators[1];
+            }
+        }
+    }
+
+    // Scenario B: initiator0 + target0
+    action soc_init0_target0 {
+        activity {
+            parallel {
+                do SPI_initiator_c::intr_configure with comp == pss_top.spi_initiators[0];
+                do SPI_target_c::tgt_configure    with comp == pss_top.spi_targets[0];
+            }
+        }
+    }
+
+    // Scenario C: both targets active simultaneously
+    action soc_2_targets {
+        activity {
+            parallel {
+                do SPI_target_c::tgt_configure with comp == pss_top.spi_targets[0];
+                do SPI_target_c::tgt_configure with comp == pss_top.spi_targets[1];
+            }
+        }
+    }
+}
