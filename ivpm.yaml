@@ -19,6 +19,8 @@ package:
       url: https://github.com/zuspec/zuspec-be-trace.git
     - name: zuspec-be-hdlsim
       url: https://github.com/zuspec/zuspec-be-hdlsim.git
+    - name: pssparser
+      url: https://github.com/psstools/pssparser.git
     - name: zuspec-fe-pss
       url: https://github.com/zuspec/zuspec-fe-pss.git
     - name: zuspec-fe-sv
