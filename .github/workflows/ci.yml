@@ -5,7 +5,56 @@ on:
   - workflow_dispatch
 
 jobs:
+  # ---------------------------------------------------------------------- #
+  # The release-authority master switch. Resolved in its OWN job because an
+  # `if:` on a job cannot reference a step in that same job, so the value has
+  # to arrive through `needs.<job>.outputs`.
+  #
+  # A consumer that reads needs.gate.outputs WITHOUT declaring `needs: gate`
+  # gets an EMPTY STRING rather than an error -- the publish condition is then
+  # false forever, nothing publishes, and nothing goes red. That is the
+  # quietest failure available here, so the shadow check in
+  # .forgejo/workflows/ci.yml asserts the wiring explicitly.
+  # ---------------------------------------------------------------------- #
+  gate:
+    name: Release authority
+    runs-on: ubuntu-latest
+    outputs:
+      authority: ${{ steps.resolve.outputs.authority }}
+    steps:
+      - id: resolve
+        # The python is ONE LINE on purpose: a multi-line `python3 -c` body has
+        # to start at column 0, which terminates the YAML block scalar above it
+        # and silently corrupts the workflow rather than failing to parse.
+        run: |
+          url=https://dvkit.org/.well-known/release-authority.json
+          if ! body=$(curl -fsS --max-time 10 "$url"); then
+            # FAIL CLOSED WHEN A RELEASE COULD ACTUALLY HAPPEN, and quietly
+            # otherwise. In this org a release is a `v*` TAG, so that -- not
+            # the event name -- is the test. Keying on the event name would be
+            # wrong in both directions: a tag push IS a push, so it would let a
+            # release through unresolved, and every ordinary push would then
+            # also be treated as release-critical and fail the build.
+            #
+            # A release blocked by a dvkit.org outage is recoverable in ten
+            # minutes. A version published twice from two forges is not: PyPI
+            # lets a version be yanked, never reused.
+            case "$GITHUB_REF" in
+              refs/tags/v*)
+                echo "::error::release-authority switch unreachable; refusing to publish"
+                exit 1 ;;
+              *)
+                echo "authority=none" >> "$GITHUB_OUTPUT"
+                echo "switch unreachable, and this ref cannot release; continuing"
+                exit 0 ;;
+            esac
+          fi
+          auth=$(printf '%s' "$body" | python3 -c 'import json,os,sys; d=json.load(sys.stdin); r=os.environ["GITHUB_REPOSITORY"]; print(d["repos"].get(r) or d["orgs"].get(r.split("/")[0]) or d["default"])')
+          echo "release authority for $GITHUB_REPOSITORY: $auth"
+          echo "authority=$auth" >> "$GITHUB_OUTPUT"
+
   ci-linux:
+    needs: gate
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -16,8 +65,56 @@ jobs:
       run: |
         python3 -m venv py
         ./py/bin/python3 -m pip install setuptools wheel twine build
-        sed -i -e "s/version = \"\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)\"/version = \"\1\.${GITHUB_RUN_ID}\"/" pyproject.toml
-        ./py/bin/python3 -m build --wheel --no-isolation 
+        # DEVELOPMENT BUILDS ARE NOW UNPUBLISHABLE, not merely unpublished.
+        #
+        # This used to stamp "\1.${GITHUB_RUN_ID}" unconditionally, producing
+        # e.g. 0.0.1.33355444839 -- a perfectly valid and perfectly UPLOADABLE
+        # PyPI version, which the branch-gated step below then uploaded on
+        # every push to main.
+        #
+        # ".dev<run-id>+gh" is a PEP 440 LOCAL VERSION SEGMENT (the part after
+        # the '+'). PyPI rejects any upload carrying one, outright, at the
+        # tool. The tag gate on the publish step is the control; this is the
+        # backstop for the day someone edits that gate.
+        #
+        # `.dev` also sorts BELOW the release it derives from, so
+        # 0.0.1.dev123+gh precedes 0.0.1 rather than shadowing it. The platform
+        # tag matters because GITHUB_RUN_ID is not unique across forges:
+        # GitHub's is an 11-digit global counter, Forgejo's a per-repo index
+        # that restarts if the instance is rebuilt.
+        #
+        # On a v* tag the version is left exactly as committed.
+        #
+        # KEYED ON $GITHUB_REF, not on `git tag --points-at`. The publish step
+        # below gates on refs/tags/v*, and these two must never disagree: if
+        # the version logic decided "development" on a build the publish step
+        # decided was "release", the upload would carry an unpublishable local
+        # version and the release would go red. Asking git is also unreliable
+        # under actions/checkout's shallow default, which is a fetch of one
+        # ref rather than of the tag namespace. One signal, read the same way
+        # in both places.
+        #
+        # ON A TAG THE VERSION COMES FROM THE TAG, and that is not polish --
+        # without it the gated design cannot publish anything usable. This
+        # package has only ever released 0.0.1.<run-id> builds; pyproject.toml
+        # still says 0.0.1 and never moved, because the run-id WAS the version.
+        # A tag build that shipped the committed 0.0.1 would sort BELOW every
+        # one of those (0.0.1 < 0.0.1.6526096472), so pip would never select
+        # the first real release. The tag is now the only place a human states
+        # a version, so it is the one that is used.
+        #
+        # NOTE FOR WHOEVER CUTS THE FIRST RELEASE: it must be v0.0.2 or later.
+        # v0.0.1 would be refused by PyPI as an existing version, and any
+        # 0.0.1.* would still sort below the published run-id stream.
+        case "$GITHUB_REF" in
+          refs/tags/v*)
+            v="${GITHUB_REF#refs/tags/v}"
+            sed -i -e "s/^version = \".*\"/version = \"${v}\"/" pyproject.toml ;;
+          *)
+            sed -i -e "s/version = \"\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)\"/version = \"\1.dev${GITHUB_RUN_ID}+gh\"/" pyproject.toml ;;
+        esac
+        grep -m1 '^version' pyproject.toml
+        ./py/bin/python3 -m build --wheel --no-isolation
 #    - name: Build Docs
 #      run: |
 #        make html
@@ -30,10 +127,37 @@ jobs:
 #        branch: gh-pages
 #        folder: html
     - name: Publish to PyPi
-      if: startsWith(github.ref, 'refs/heads/main')
+      # GATED 2026-08-31 (wave 4). Two clauses, and both are load-bearing:
+      #
+      #   refs/tags/v*   this repo is joining a five-minute bidirectional
+      #                  Forgejo <-> GitHub mirror, and git-sync moves the
+      #                  DEFAULT BRANCH. The condition replaced here was
+      #                  `refs/heads/main`, which a sync cycle satisfies by
+      #                  construction -- so mirroring was a release trigger. A
+      #                  tag is a deliberate act; a cycle never creates one.
+      #
+      #   authority      the release-authority master switch at
+      #                  dvkit.org/.well-known/release-authority.json, so that
+      #                  which forge may publish is one decision in one place
+      #                  rather than one per workflow file.
+      #
+      # SKIPS, does not fail, when the switch names Forgejo: a red build on the
+      # dormant side every time anyone tags would train people to ignore the
+      # signal, which is worse than no signal.
+      if: >-
+        needs.gate.outputs.authority == 'github' &&
+        startsWith(github.ref, 'refs/tags/v')
       env:
         TWINE_USERNAME: __token__
         TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
       run: |
-        ./py/bin/python3 -m twine upload dist/*.whl
-
+        if [ -z "$TWINE_PASSWORD" ]; then
+          echo "::error::PYPI_API_TOKEN is not visible to this repository"
+          exit 1
+        fi
+        ./py/bin/python3 -m twine check dist/*.whl
+        # --skip-existing is the idempotence net: with one switch and two
+        # possible publishers, a double-fire must be a no-op rather than a hard
+        # failure. Without it a re-run of a tag build fails on "File already
+        # exists", which reads like a broken release.
+        ./py/bin/python3 -m twine upload --non-interactive --skip-existing dist/*.whl
